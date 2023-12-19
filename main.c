@@ -30,6 +30,7 @@ void show_help(const char *progname)
 	printf("  -a {0,1}   Set RTS after send low/high\n");
 	printf("  -r {0,1}   Set RX during TX\n");
 	printf("  -d d1 d2   Set delay RTS before (d1) and after (d2) send\n");
+	printf("  -t {0,1}   Set bus termination\n");
 }
 
 void dump_conf(struct serial_rs485 *rs485conf)
@@ -40,6 +41,7 @@ void dump_conf(struct serial_rs485 *rs485conf)
 	printf("RTS delay before send:        %d\n", (int) rs485conf->delay_rts_before_send);
 	printf("RTS delay after send:         %d\n", (int) rs485conf->delay_rts_after_send);
 	printf("Receive during sending data:  %s\n", (rs485conf->flags & SER_RS485_RX_DURING_TX) ? "true" : "false");
+	printf("Bus termination enabled:  %s\n", (rs485conf->flags & SER_RS485_TERMINATE_BUS) ? "true" : "false");
 }
 
 enum state {
@@ -56,6 +58,7 @@ struct config {
 	enum state rx_during_tx;
 	int delay_rts_before_send;
 	int delay_rts_after_send;
+	enum state bus_term;
 };
 
 static struct config config = {
@@ -83,7 +86,7 @@ void parse_options(int argc, char **argv)
 {
 	int c;
 
-	while ((c = getopt(argc, argv, "he:o:a:r:d:")) != -1) {
+	while ((c = getopt(argc, argv, "he:o:a:r:d:t:")) != -1) {
 		switch (c) {
 		case 'h':
 			show_help(argv[0]);
@@ -140,6 +143,14 @@ void parse_options(int argc, char **argv)
 			config.delay_rts_after_send = d2;
 			break;
 		}
+		case 't':
+			if (!strcmp(optarg, "0"))
+				config.bus_term = STATE_FALSE;
+			else if (!strcmp(optarg, "1"))
+				config.bus_term = STATE_TRUE;
+			else
+				opt_fail("Invalid -t argument!\n");
+			break;
 		}
 	}
 
@@ -179,7 +190,8 @@ int main(int argc, char *argv[])
 		config.rts_after_send == STATE_NONE &&
 		config.rx_during_tx == STATE_NONE &&
 		config.delay_rts_before_send == -1 &&
-		config.delay_rts_after_send == -1)
+		config.delay_rts_after_send == -1 &&
+		config.bus_term == STATE_NONE)
 		goto close_fd;
 
 	/* Set new configuration */
@@ -187,6 +199,7 @@ int main(int argc, char *argv[])
 	SET_FLAGS_FROM_STATE(rs485conf.flags, SER_RS485_RTS_ON_SEND, config.rts_on_send);
 	SET_FLAGS_FROM_STATE(rs485conf.flags, SER_RS485_RTS_AFTER_SEND, config.rts_after_send);
 	SET_FLAGS_FROM_STATE(rs485conf.flags, SER_RS485_RX_DURING_TX, config.rx_during_tx);
+	SET_FLAGS_FROM_STATE(rs485conf.flags, SER_RS485_TERMINATE_BUS, config.bus_term);
 	if (config.delay_rts_before_send != -1)
 		rs485conf.delay_rts_before_send = config.delay_rts_before_send;
 	if (config.delay_rts_after_send != -1)
